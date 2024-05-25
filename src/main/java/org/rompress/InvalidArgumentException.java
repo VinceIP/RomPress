@@ -5,7 +5,7 @@ public class InvalidArgumentException extends Exception{
             "Example usage:\n" +
             "--help: Display help.\n" +
             "--press: Intelligently compress a directory of files to save disk space. Input directory is needed using --input ''directory''\n" +
-            "--input: Provide RomPress with an input directory to work on.";
+            "--input: Provide RomPress with an input directory to work on. Directory name must be wrapped in quotes if it contains a space.";
 
     public InvalidArgumentException(String message){
         super(message);
