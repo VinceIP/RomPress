@@ -51,7 +51,7 @@ public class CompressionUtils {
                         String fileName = p.getFileName().toString();
                         return fileName.endsWith(".nes") ||
                                 fileName.endsWith(".sfc") ||
-                                fileName.endsWith(".n64") ||
+                                fileName.endsWith(".z64") ||
                                 fileName.endsWith(".gba");
                     }).collect(Collectors.toList());
 
@@ -60,6 +60,7 @@ public class CompressionUtils {
 
     //Get the current size of relevant files in a directory
     public static long calculateDirectorySize(Path path) throws IOException {
+        System.out.println("Scanning path: " + path.getFileName());
         //Try to walk through our files
         try (Stream<Path> stream = Files.walk(path)) {
             //Find files that are not symbolic links/directories, map their file size to a LongStream, and sum the value
@@ -141,7 +142,15 @@ public class CompressionUtils {
         // Output filename is equal to the inputFilename without any extension
         String outputFileName = inputFileName.substring(0, inputFileName.lastIndexOf('.'));
         // Command as a list of strings
-        List<String> command = Arrays.asList(sevenZipPath.toString(), "a", outputFileName + ".7z", inputFileName);
+        List<String> command = Arrays.asList(sevenZipPath.toString(), "a",
+                "-t7z",
+                "-mx=9",
+                "-m0=lzma2",
+                "-md=64m",
+                "-mfb=273",
+                "-ms=on",
+                outputFileName + ".7z",
+                inputFileName);
 
         processBuilder.command(command);
         processBuilder.directory(file.getParent().toFile()); // Set the working directory to the parent directory of the file
@@ -163,6 +172,16 @@ public class CompressionUtils {
         for(Path file: workingFiles){
         }
 
+    }
+
+    public static void deleteExtractedFiles(List<Path> workingFiles){
+        for(Path file: workingFiles){
+            try{
+                Files.delete(file);
+            } catch(IOException e){
+                System.out.println("Error deleting file: " + file.getFileName());
+            }
+        }
     }
 
 
