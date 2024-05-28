@@ -40,7 +40,7 @@ public class PressCommand {
             System.out.println("Found: " + workingFiles.size() + " ROM files totalling " + CompressionUtils.calculateDirectorySize(CompressionUtils.outputPath) + " bytes.\n" +
                     "Compressing to 7zip.");
             //Recompress scanned files to 7z
-            CompressionUtils.compressFilesAs7z(workingFiles);
+            //CompressionUtils.compressFilesAs7z(workingFiles);
             System.out.println("Finished.");
             //Cleanup previously extracted roms
             CompressionUtils.deleteExtractedFiles(workingFiles);
