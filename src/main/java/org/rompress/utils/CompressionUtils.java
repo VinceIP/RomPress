@@ -16,6 +16,12 @@ import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+/*
+RomPress version 0.1
+Authors:
+    @Vince Patterson
+*/
+
 public class CompressionUtils {
     public final static String outputDir = "output";
     public static Path outputPath = null;
@@ -83,24 +89,47 @@ public class CompressionUtils {
 
 
     //Extract files and write them to an output path
-    public static void extractFiles(Path inputPath, List<Path> workingFiles) throws IOException {
+    public static void extractFiles(Path inputPath, List<Path> workingFiles) throws IOException, InterruptedException {
         //Create an output directory for extracted files if it doesn't exist
         outputPath = inputPath.resolve(outputDir);
         if (!Files.exists(outputPath)) Files.createDirectory(outputPath);
-        //For each file in our filtered list of files
-        try (ProgressBar progressBar = new ProgressBarBuilder()
-                .setStyle(ProgressBarStyle.ASCII)
-                .setTaskName("Extracting files")
-                .setInitialMax(workingFiles.size())
-                .setUpdateIntervalMillis(10)
-                .build()
+        //Wrap process in a progress bar
+
+        try (
+                ProgressBar progressBarExtraction = new ProgressBarBuilder()
+                        .setInitialMax(workingFiles.size())
+                        .setStyle(ProgressBarStyle.ASCII)
+                        .setTaskName("Extracting files...")
+                        .setUpdateIntervalMillis(20)
+                        .build();
+                ProgressBar progressBarArchive = new ProgressBarBuilder()
+                        .setInitialMax(100)
+                        .setStyle(ProgressBarStyle.ASCII)
+                        .setUpdateIntervalMillis(10)
+                        .build();
         ) {
             for (Path file : workingFiles) {
-                System.out.println("File: " + file.getFileName());
-                extractFile(file, outputPath);
-                progressBar.step();
+                int archiveProgress = extractFile(file, outputPath);
+                progressBarExtraction.step();
+                progressBarArchive.stepTo(archiveProgress);
             }
         }
+
+
+//        try (ProgressBar progressBar = new ProgressBarBuilder()
+//                .setStyle(ProgressBarStyle.ASCII)
+//                .setTaskName("Extracting files...")
+//                .setInitialMax(workingFiles.size())
+//                .setUpdateIntervalMillis(10)
+//                .build()
+//        ) {
+//            //For each file in our filtered list of files
+//            for (Path file : workingFiles) {
+//                System.out.println("File: " + file.getFileName());
+//                extractFile(file, outputPath);
+//                progressBar.step();
+//            }
+//        }
 //        for (Path file : workingFiles) {
 //            System.out.println("Extracting file: " + file.toString());
 //            extractFile(file, outputPath);
@@ -108,37 +137,8 @@ public class CompressionUtils {
 
     }
 
-    //Extract a single file
-//    private static void extractFile(Path zipFilePath, Path outputPath) throws IOException {
-//        //Try to open the zip file and enumerate its contents
-//        try (ZipFile zipFile = new ZipFile(zipFilePath.toFile())) {
-//            Enumeration<? extends ZipEntry> entries = zipFile.entries();
-//
-//            while (entries.hasMoreElements()) {
-//                ZipEntry entry = entries.nextElement();
-//                //Set a path for this entry by resolving it to outputPath - "output/entry.nes"
-//                Path entryOutputPath = outputPath.resolve(entry.getName());
-//
-//                //If this entry happens to be a subdirectory in the zip file, create a directory to store it on disk
-//                if (entry.isDirectory()) {
-//                    Files.createDirectories(entryOutputPath);
-//                } else {
-//                    //Make sure the output has a parent directory
-//                    if (entryOutputPath.getParent() != null) {
-//                        Files.createDirectories(entryOutputPath.getParent());
-//                    }
-//                    //Extract the zip
-//                    try (InputStream in = zipFile.getInputStream(entry);
-//                         OutputStream out = Files.newOutputStream(entryOutputPath)) {
-//                        in.transferTo(out);
-//                    }
-//                }
-//            }
-//
-//        }
-//    }
 
-    private static void extractFile(Path archive, Path outputPath) throws IOException {
+    private static int extractFile(Path archive, Path outputPath) throws IOException, InterruptedException {
         String workingDir = System.getProperty("user.dir");
         Path sevenZipPath = Paths.get(workingDir, "7zip", "7z.exe");
         if (!Files.exists(sevenZipPath)) {
@@ -152,15 +152,36 @@ public class CompressionUtils {
         if (!Files.isDirectory(outputPath)) {
             throw new IOException("Output path is not a directory: " + outputPath);
         }
-
+        //Create a Process, setup command for 7zip
         ProcessBuilder processBuilder = new ProcessBuilder();
         List<String> command = Arrays.asList(sevenZipPath.toString(), "x",
                 archive.toAbsolutePath().toString(),
                 "-o" + outputPath.toAbsolutePath());
-        //System.out.println("Running command: " + String.join(" ", command));
         processBuilder.command(command);
         processBuilder.directory(outputPath.toFile());
         Process process = processBuilder.start();
+        //Prepare to read 7zip's output, checking for progress percentage
+        BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
+        //While 7zip is outputting something related to %...
+        String line;
+        while ((line = reader.readLine()) != null) {
+            if (line.contains("%")) {
+                //Split each token to String array
+                String[] tokens = line.split(" ");
+                for (String token : tokens) {
+                    if (token.endsWith("%")) {
+                        try {
+                            //If this token indicates 7zip's progress, parse that string as an int
+                            //without the percent sign.
+                            return Integer.parseInt(token.replace("%", ""));
+                        } catch (NumberFormatException e) {
+                            System.out.println(e.getMessage());
+                        }
+                    }
+                }
+            }
+            process.waitFor();
+        }
 
         // Capture and print standard output and error output from 7z
 //        try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
@@ -186,7 +207,85 @@ public class CompressionUtils {
             Thread.currentThread().interrupt();
             throw new IOException("7zip process was interrupted", e);
         }
+        return 0;
     }
+
+
+//    private static void extractFile(Path archive, Path outputPath) throws IOException, InterruptedException {
+//        String workingDir = System.getProperty("user.dir");
+//        Path sevenZipPath = Paths.get(workingDir, "7zip", "7z.exe");
+//        if (!Files.exists(sevenZipPath)) {
+//            throw new IOException("7z not found at " + sevenZipPath);
+//        }
+//
+//        if (!Files.exists(archive)) {
+//            throw new IOException("Archive not found at " + archive);
+//        }
+//
+//        if (!Files.isDirectory(outputPath)) {
+//            throw new IOException("Output path is not a directory: " + outputPath);
+//        }
+//        //Create a Process, setup command for 7zip
+//        ProcessBuilder processBuilder = new ProcessBuilder();
+//        List<String> command = Arrays.asList(sevenZipPath.toString(), "x",
+//                archive.toAbsolutePath().toString(),
+//                "-o" + outputPath.toAbsolutePath());
+//        processBuilder.command(command);
+//        processBuilder.directory(outputPath.toFile());
+//        Process process = processBuilder.start();
+//        //Prepare to read 7zip's output, checking for progress percentage
+//        BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
+//        try (ProgressBar progressBar = new ProgressBar(archive.getFileName().toString(), 100)) {
+//            //While 7zip is outputting something related to %...
+//            String line;
+//            while ((line = reader.readLine()) != null) {
+//                if (line.contains("%")) {
+//                    int progress = 0;
+//                    //Split each token to String array
+//                    String[] tokens = line.split(" ");
+//                    for (String token : tokens) {
+//                        if (token.endsWith("%")) {
+//                            try {
+//                                //If this token indicates 7zip's progress, parse that string as an int
+//                                //without the percent sign.
+//                                progress = Integer.parseInt(token.replace("%", ""));
+//                            } catch (NumberFormatException e) {
+//                                System.out.println(e.getMessage());
+//                            }
+//                        }
+//                    }
+//                    progressBar.stepTo(progress);
+//                }
+//            }
+//            progressBar.close();
+//            process.waitFor();
+//        }
+//
+//        // Capture and print standard output and error output from 7z
+////        try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
+////             BufferedReader errorReader = new BufferedReader(new InputStreamReader(process.getErrorStream()))) {
+////
+////            String line;
+////            while ((line = reader.readLine()) != null) {
+////                System.out.println(line);
+////            }
+////            while ((line = errorReader.readLine()) != null) {
+////                System.out.println(line);
+////            }
+////        } catch (IOException e) {
+////            System.out.println(e.getMessage());
+////        }
+//
+//        try {
+//            int exitCode = process.waitFor();
+//            if (exitCode != 0) {
+//                throw new IOException("7zip process exited with code " + exitCode);
+//            }
+//        } catch (InterruptedException e) {
+//            Thread.currentThread().interrupt();
+//            throw new IOException("7zip process was interrupted", e);
+//        }
+//    }
 
 
     public static void compressFilesAs7z(List<Path> workingFiles) throws IOException {
