@@ -3,6 +3,7 @@ package org.rompress;
 import org.rompress.utils.CompressionUtils;
 import org.rompress.utils.FileUtils;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -32,15 +33,15 @@ public class PressCommand {
             workingFiles = CompressionUtils.scanArchives(inputDir);
             workingPath = Paths.get(inputDir);
             directorySizeBefore = CompressionUtils.calculateDirectorySize(workingPath);
-            System.out.println("Found " + workingFiles.size() + " files to process totalling " + directorySizeBefore + " bytes.");
+            System.out.println("Found " + workingFiles.size() + " files to process totalling " + FileUtils.humanReadableByteCount(directorySizeBefore));
             //Extract files
             CompressionUtils.extractFiles(workingPath, workingFiles);
             //Scan output folder of ROMs
             workingFiles = CompressionUtils.scanRoms(outputDir);
-            System.out.println("Found: " + workingFiles.size() + " ROM files totalling " + CompressionUtils.calculateDirectorySize(CompressionUtils.outputPath) + " bytes.\n" +
+            System.out.println("Found: " + workingFiles.size() + " ROM files totalling " + FileUtils.humanReadableByteCount(CompressionUtils.calculateDirectorySize(CompressionUtils.outputPath))+"\n" +
                     "Compressing to 7zip.");
             //Recompress scanned files to 7z
-            //CompressionUtils.compressFilesAs7z(workingFiles);
+            CompressionUtils.compressFilesAs7z(workingFiles);
             System.out.println("Finished.");
             //Cleanup previously extracted roms
             CompressionUtils.deleteExtractedFiles(workingFiles);
@@ -51,8 +52,6 @@ public class PressCommand {
             System.out.println("Directory size before compression: " + FileUtils.humanReadableByteCount(directorySizeBefore));
             System.out.println("Directory size after compression: " + FileUtils.humanReadableByteCount(directorySizeAfter));
             System.out.println("Disk space saved in operation: " + FileUtils.humanReadableByteCount(directorySizeDifference));
-
-
 
         } catch (IOException e) {
             System.out.println(e.getMessage());
